@@ -1,0 +1,15 @@
+services:
+  backend:
+    container_name: tg-bot-rs
+    image: tg-bot-rs:latest
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./app:/app
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M

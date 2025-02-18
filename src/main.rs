@@ -13,8 +13,6 @@ use crate::{
 
 #[tokio::main]
 async fn main() {
-    let log_path = std::env::var("LOG_PATH").unwrap();
-    log4rs::init_file(log_path, Default::default()).unwrap();
     run().await;
 }
 
