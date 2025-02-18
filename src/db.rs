@@ -8,6 +8,15 @@ pub fn get_db(path: Option<&str>) -> Result<Connection> {
         }
         None => Connection::open_in_memory()?,
     };
+
+    db.execute_batch(
+        "PRAGMA journal_mode = WAL;
+         PRAGMA synchronous = NORMAL;
+         PRAGMA cache_size = -2000;
+         PRAGMA temp_store = MEMORY;
+         PRAGMA mmap_size = 30000000000;",
+    )?;
+
     run_migrations(&db)?;
     Ok(db)
 }
