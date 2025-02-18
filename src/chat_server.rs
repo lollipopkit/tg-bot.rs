@@ -68,13 +68,29 @@ impl ChatServer {
         username: &String,
         text: Option<&str>,
         time: i64,
+        media_type: Option<&str>,
+        file_id: Option<&str>,
+        file_unique_id: Option<&str>,
+        emoji: Option<&str>,
     ) -> Result<()> {
         let lock = self.database.lock().unwrap();
         let mut stmt = lock.prepare(
-            "INSERT INTO message_records(group_id, message_id, username, message_text, message_time) 
-             VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO message_records(
+                group_id, message_id, username, message_text, 
+                message_time, media_type, file_id, file_unique_id, emoji
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )?;
-        stmt.execute(params![chat_id, message_id, username, text, time])?;
+        stmt.execute(params![
+            chat_id,
+            message_id,
+            username,
+            text,
+            time,
+            media_type,
+            file_id,
+            file_unique_id,
+            emoji
+        ])?;
 
         Ok(())
     }
@@ -150,18 +166,22 @@ mod tests {
         let cs = ChatServer::in_memory();
 
         for _ in 0..10 {
-            cs.store_msg(0, 0, &format!("{}", 0), None, 0).unwrap();
+            cs.store_msg(0, 0, &format!("{}", 0), None, 0, None, None, None, None)
+                .unwrap();
         }
 
         for _ in 0..3 {
-            cs.store_msg(0, 0, &format!("{}", 1), None, 0).unwrap();
+            cs.store_msg(0, 0, &format!("{}", 1), None, 0, None, None, None, None)
+                .unwrap();
         }
 
         for _ in 0..7 {
-            cs.store_msg(0, 0, &format!("{}", 2), None, 0).unwrap();
+            cs.store_msg(0, 0, &format!("{}", 2), None, 0, None, None, None, None)
+                .unwrap();
         }
 
-        cs.store_msg(0, 0, &format!("{}", 3), None, 0).unwrap();
+        cs.store_msg(0, 0, &format!("{}", 3), None, 0, None, None, None, None)
+            .unwrap();
 
         let tot: f32 = 10.0 + 3.0 + 7.0 + 1.0;
         let data = cs.get_group_percent(0).unwrap();
@@ -177,18 +197,22 @@ mod tests {
         let cs = ChatServer::in_memory();
 
         for _ in 0..10 {
-            cs.store_msg(0, 0, &"0".to_string(), None, 0).unwrap();
+            cs.store_msg(0, 0, &"0".to_string(), None, 0, None, None, None, None)
+                .unwrap();
         }
 
         for _ in 0..3 {
-            cs.store_msg(0, 0, &"1".to_string(), None, 0).unwrap();
+            cs.store_msg(0, 0, &"1".to_string(), None, 0, None, None, None, None)
+                .unwrap();
         }
 
         for _ in 0..7 {
-            cs.store_msg(0, 0, &"2".to_string(), None, 0).unwrap();
+            cs.store_msg(0, 0, &"2".to_string(), None, 0, None, None, None, None)
+                .unwrap();
         }
 
-        cs.store_msg(0, 0, &"3".to_string(), None, 0).unwrap();
+        cs.store_msg(0, 0, &"3".to_string(), None, 0, None, None, None, None)
+            .unwrap();
 
         let tot: f32 = 10.0 + 3.0 + 7.0 + 1.0;
         let percent = cs.get_user_percent_str(0, &String::from("1")).unwrap();

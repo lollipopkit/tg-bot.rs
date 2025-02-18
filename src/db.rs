@@ -30,6 +30,10 @@ fn run_migrations(conn: &Connection) -> Result<()> {
             username TEXT NOT NULL,
             message_text TEXT,
             message_time INTEGER NOT NULL,
+            media_type TEXT,
+            file_id TEXT,
+            file_unique_id TEXT,
+            emoji TEXT,
             utime INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
             UNIQUE(group_id, message_id)
         );",

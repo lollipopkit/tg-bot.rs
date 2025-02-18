@@ -10,15 +10,22 @@ use crate::{chat_server::ChatServer, handler::handle};
 
 #[tokio::main]
 async fn main() {
-    log::info!("Starting...");
-
     init().await;
     run().await;
-
-    log::info!("Goodbye!");
 }
 
 async fn init() {
+    let log_level = env::var("RUST_LOG").unwrap_or(
+        cfg!(debug_assertions)
+            .then(|| "debug")
+            .unwrap_or("info")
+            .to_string(),
+    );
+    pretty_env_logger::formatted_builder()
+        .filter_level(log::LevelFilter::Info)
+        .parse_filters(&log_level)
+        .init();
+
     fs::create_dir_all(".db").await.unwrap();
 }
 

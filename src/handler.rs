@@ -1,5 +1,9 @@
 use std::{error::Error, sync::Arc};
-use teloxide::{prelude::*, types::MessageKind::Common, utils::command::BotCommands};
+use teloxide::{
+    prelude::*,
+    types::{MediaKind, MessageKind::Common},
+    utils::command::BotCommands,
+};
 
 use crate::chat_server::ChatServer;
 
@@ -23,6 +27,8 @@ pub async fn handle(
         //     .await?;
         return Ok(());
     }
+
+    log::debug!("Received message: {:?}", m);
 
     let text = match m.text() {
         Some(text) => text,
@@ -48,7 +54,43 @@ pub async fn handle(
             Common(common_msg) => {
                 if let Some(user) = &common_msg.from {
                     if let Some(username) = &user.username {
-                        cs.store_msg(chat_id, m.id, username, m.text(), m.date.timestamp())?;
+                        let (media_type, file_id, file_unique_id, emoji) =
+                            match &common_msg.media_kind {
+                                MediaKind::Sticker(sticker) => (
+                                    Some("sticker"),
+                                    Some(sticker.sticker.file_id.as_str()),
+                                    Some(sticker.sticker.file_unique_id.as_str()),
+                                    sticker.sticker.emoji.as_deref(),
+                                ),
+                                MediaKind::Photo(photo) => {
+                                    let photo = photo.photo.last().unwrap();
+                                    (
+                                        Some("photo"),
+                                        Some(photo.file_id.as_str()),
+                                        Some(photo.file_unique_id.as_str()),
+                                        None,
+                                    )
+                                }
+                                MediaKind::Video(video) => (
+                                    Some("video"),
+                                    Some(video.video.file_id.as_str()),
+                                    Some(video.video.file_unique_id.as_str()),
+                                    None,
+                                ),
+                                _ => (None, None, None, None),
+                            };
+
+                        cs.store_msg(
+                            chat_id,
+                            m.id,
+                            username,
+                            m.text(),
+                            m.date.timestamp(),
+                            media_type,
+                            file_id,
+                            file_unique_id,
+                            emoji,
+                        )?;
                     }
                 }
             }
