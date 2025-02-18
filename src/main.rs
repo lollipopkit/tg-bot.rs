@@ -1,37 +1,39 @@
-pub mod handler;
 mod chat_server;
 mod db;
+pub mod handler;
 
-use std::{sync::Arc, env};
+use std::{env, sync::Arc};
 use teloxide::prelude::*;
+use tokio::fs;
 
-use crate::{
-    handler::handle,
-    chat_server::ChatServer
-};
-
+use crate::{chat_server::ChatServer, handler::handle};
 
 #[tokio::main]
 async fn main() {
+    log::info!("Starting...");
+
+    init().await;
     run().await;
+
+    log::info!("Goodbye!");
+}
+
+async fn init() {
+    fs::create_dir_all(".db").await.unwrap();
 }
 
 async fn run() {
-    log::info!("Starting group-activity-bot");
+    let db_path = env::var("DB_PATH").unwrap_or(".db/group.db".to_string());
 
-    let bot = Bot::from_env().auto_send();
-    let db_path = env::var("DB_PATH").unwrap();
     let chat_server = Arc::new(ChatServer::new(db_path));
 
-    let handler = dptree::entry()
-        .branch(Update::filter_message().endpoint(handle));
+    let handler = dptree::entry().branch(Update::filter_message().endpoint(handle));
 
+    let bot = Bot::from_env().auto_send();
     Dispatcher::builder(bot, handler)
         .dependencies(dptree::deps![chat_server])
         .build()
         .setup_ctrlc_handler()
         .dispatch()
         .await;
-
-    log::info!("Closing bot... Goodbye!");
 }

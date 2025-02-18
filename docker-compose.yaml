@@ -7,7 +7,7 @@ services:
       - TZ=Asia/Shanghai
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - ./app:/app
+      - ./.db:/app/.db
     deploy:
       resources:
         limits:

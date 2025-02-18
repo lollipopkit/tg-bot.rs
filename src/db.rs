@@ -6,9 +6,7 @@ pub fn get_db(path: Option<&str>) -> Result<Connection> {
             let path = path;
             Connection::open(&path)?
         }
-        None => {
-            Connection::open_in_memory()?
-        }
+        None => Connection::open_in_memory()?,
     };
     run_migrations(&db)?;
     Ok(db)
@@ -17,10 +15,16 @@ pub fn get_db(path: Option<&str>) -> Result<Connection> {
 fn run_migrations(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS message_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             group_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
             username TEXT NOT NULL,
-            utime    INTEGER NOT NULL DEFAULT (strftime('%s', 'now')) 
-        );", [],
+            message_text TEXT,
+            message_time INTEGER NOT NULL,
+            utime INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+            UNIQUE(group_id, message_id)
+        );",
+        [],
     )?;
 
     Ok(())

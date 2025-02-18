@@ -1,9 +1,5 @@
 use std::{error::Error, sync::Arc};
-use teloxide::{
-    prelude::*,
-    types::MessageKind::Common,
-    utils::command::BotCommands
-};
+use teloxide::{prelude::*, types::MessageKind::Common, utils::command::BotCommands};
 
 use crate::chat_server::ChatServer;
 
@@ -17,38 +13,42 @@ enum Command {
 pub async fn handle(
     bot: AutoSend<Bot>,
     m: Message,
-    cs: Arc<ChatServer>
-)
-    -> Result<(), Box<dyn Error + Send + Sync>> 
-{
+    cs: Arc<ChatServer>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     let chat_id = m.chat.id.0;
-    
+
     // Telegram uses negative numbers for groups' `chat_id`
     if chat_id > 0 {
-        bot.send_message(m.chat.id, "This bot is only useful in groups.").await?;
+        // bot.send_message(m.chat.id, "This bot is only useful in groups.")
+        //     .await?;
+        return Ok(());
     }
 
     let text = match m.text() {
         Some(text) => text,
-        None => { 
-            return Ok(()); 
+        None => {
+            return Ok(());
         }
     };
 
     let mut response = String::from("");
-    if let Ok(command) = Command::parse(text, "gactivitybot") {
+    if let Ok(command) = Command::parse(text, "lollipopkit_bot") {
         response = match command {
             Command::GroupStats => {
-                format!("Total: {}\n{}", cs.get_tot_msg(chat_id)?, cs.get_group_percent_str(chat_id)?)
-            },
+                format!(
+                    "Total: {}\n{}",
+                    cs.get_tot_msg(chat_id)?,
+                    cs.get_group_percent_str(chat_id)?
+                )
+            }
             Command::UserStats(username) => cs.get_user_percent_str(chat_id, &username)?,
         }
     } else {
-        match m.kind {
+        match &m.kind {
             Common(common_msg) => {
                 if let Some(user) = &common_msg.from {
                     if let Some(username) = &user.username {
-                        cs.store_msg(chat_id, &username)?;
+                        cs.store_msg(chat_id, m.id, username, m.text(), m.date.timestamp())?;
                     }
                 }
             }
