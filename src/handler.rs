@@ -1,105 +1,94 @@
 use std::{error::Error, sync::Arc};
-use teloxide::{
-    prelude::*,
-    types::{MediaKind, MessageKind::Common},
-    utils::command::BotCommands,
-};
+use teloxide::{prelude::*, utils::command::BotCommands};
 
-use crate::chat_server::ChatServer;
+use crate::{consts::BOT_ID, db::Chat};
 
 #[derive(BotCommands, PartialEq, Debug)]
-#[command(rename = "lowercase")]
 enum Command {
+    #[command(rename = "lowercase")]
     GroupStats,
+    #[command(rename = "lowercase")]
     UserStats(String),
 }
 
 pub async fn handle(
-    bot: AutoSend<Bot>,
+    bot: Bot,
     m: Message,
-    cs: Arc<ChatServer>,
+    cs: Arc<Chat>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    let chat_id = m.chat.id.0;
+    let chat_id = m.chat.id;
 
     // Telegram uses negative numbers for groups' `chat_id`
-    if chat_id > 0 {
-        // bot.send_message(m.chat.id, "This bot is only useful in groups.")
-        //     .await?;
+    if chat_id.0 > 0 {
         return Ok(());
     }
 
     log::debug!("Received message: {:?}", m);
 
-    let text = match m.text() {
-        Some(text) => text,
-        None => {
-            return Ok(());
+    if let Some(text) = m.text() {
+        if let Ok(command) = Command::parse(text, BOT_ID) {
+            handle_cmd(&bot, &m, cs.clone(), command).await?;
         }
     };
 
-    let mut response = String::from("");
-    if let Ok(command) = Command::parse(text, "lollipopkit_bot") {
-        response = match command {
-            Command::GroupStats => {
-                format!(
-                    "Total: {}\n{}",
-                    cs.get_tot_msg(chat_id)?,
-                    cs.get_group_percent_str(chat_id)?
-                )
-            }
-            Command::UserStats(username) => cs.get_user_percent_str(chat_id, &username)?,
-        }
-    } else {
-        match &m.kind {
-            Common(common_msg) => {
-                if let Some(user) = &common_msg.from {
-                    if let Some(username) = &user.username {
-                        let (media_type, file_id, file_unique_id, emoji) =
-                            match &common_msg.media_kind {
-                                MediaKind::Sticker(sticker) => (
-                                    Some("sticker"),
-                                    Some(sticker.sticker.file_id.as_str()),
-                                    Some(sticker.sticker.file_unique_id.as_str()),
-                                    sticker.sticker.emoji.as_deref(),
-                                ),
-                                MediaKind::Photo(photo) => {
-                                    let photo = photo.photo.last().unwrap();
-                                    (
-                                        Some("photo"),
-                                        Some(photo.file_id.as_str()),
-                                        Some(photo.file_unique_id.as_str()),
-                                        None,
-                                    )
-                                }
-                                MediaKind::Video(video) => (
-                                    Some("video"),
-                                    Some(video.video.file_id.as_str()),
-                                    Some(video.video.file_unique_id.as_str()),
-                                    None,
-                                ),
-                                _ => (None, None, None, None),
-                            };
+    handle_non_cmd(&bot, &m, cs.clone()).await?;
 
-                        cs.store_msg(
-                            chat_id,
-                            m.id,
-                            username,
-                            m.text(),
-                            m.date.timestamp(),
-                            media_type,
-                            file_id,
-                            file_unique_id,
-                            emoji,
-                        )?;
-                    }
-                }
-            }
-            _ => {}
+    Ok(())
+}
+
+async fn handle_cmd(
+    bot: &Bot,
+    m: &Message,
+    cs: Arc<Chat>,
+    cmd: Command,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let chat_id = m.chat.id;
+
+    let response = match cmd {
+        Command::GroupStats => {
+            format!(
+                "Total: {}\n{}",
+                cs.get_tot_msg(chat_id.0)?,
+                cs.get_group_percent_str(chat_id.0)?
+            )
         }
-    }
+        Command::UserStats(username) => cs.get_user_percent_str(chat_id.0, &username)?,
+    };
 
     if !response.is_empty() {
-        bot.send_message(m.chat.id, response).await?;
+        bot.send_message(chat_id, response).await?;
+    }
+
+    Ok(())
+}
+
+async fn handle_non_cmd(
+    bot: &Bot,
+    m: &Message,
+    cs: Arc<Chat>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let chat_id = m.chat.id;
+    let resp = String::new();
+
+    let user = m.from();
+    let username = user
+        .map(|u| u.username.clone())
+        .flatten()
+        .unwrap_or_default();
+    let user_id = user.map(|u| u.id.0).unwrap_or_default();
+    let raw = serde_json::to_string(&m)?;
+    cs.store_msg(
+        chat_id.0,
+        m.id.0,
+        &username,
+        m.text(),
+        m.date.timestamp(),
+        user_id,
+        &raw,
+    )?;
+
+    if !resp.is_empty() {
+        bot.send_message(chat_id, resp).await?;
     }
 
     Ok(())

@@ -1,46 +1,55 @@
-mod chat_server;
+mod consts;
 mod db;
-pub mod handler;
+mod handler;
 
+use anyhow::Result;
+use consts::{DB_DIR, GROUP_DB_FILE};
 use std::{env, sync::Arc};
+use teloxide::dispatching::UpdateFilterExt;
 use teloxide::prelude::*;
 use tokio::fs;
 
-use crate::{chat_server::ChatServer, handler::handle};
+use crate::{db::Chat, handler::handle};
 
 #[tokio::main]
-async fn main() {
-    init().await;
-    run().await;
+async fn main() -> Result<()> {
+    init().await?;
+    run().await?;
+
+    Ok(())
 }
 
-async fn init() {
-    let log_level = env::var("RUST_LOG").unwrap_or(
-        cfg!(debug_assertions)
-            .then(|| "debug")
-            .unwrap_or("info")
-            .to_string(),
-    );
-    pretty_env_logger::formatted_builder()
-        .filter_level(log::LevelFilter::Info)
-        .parse_filters(&log_level)
-        .init();
+async fn init() -> Result<()> {
+    init_logger();
+    fs::create_dir_all(DB_DIR).await?;
 
-    fs::create_dir_all(".db").await.unwrap();
+    Ok(())
 }
 
-async fn run() {
-    let db_path = env::var("DB_PATH").unwrap_or(".db/group.db".to_string());
+fn init_logger() {
+    let log_level = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "info"
+    };
 
-    let chat_server = Arc::new(ChatServer::new(db_path));
+    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| log_level.into());
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level)).init();
+}
+
+async fn run() -> Result<()> {
+    let db_path = env::var("DB_PATH").unwrap_or(GROUP_DB_FILE.to_string());
+    let chat_server = Arc::new(Chat::new(db_path)?);
 
     let handler = dptree::entry().branch(Update::filter_message().endpoint(handle));
 
-    let bot = Bot::from_env().auto_send();
+    let bot = Bot::from_env();
     Dispatcher::builder(bot, handler)
         .dependencies(dptree::deps![chat_server])
+        .enable_ctrlc_handler()
         .build()
-        .setup_ctrlc_handler()
         .dispatch()
         .await;
+
+    Ok(())
 }
