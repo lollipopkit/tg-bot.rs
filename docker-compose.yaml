@@ -8,6 +8,8 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ./.db:/app/.db
+    env_file:
+      - .env
     deploy:
       resources:
         limits:

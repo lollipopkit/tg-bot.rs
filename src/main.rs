@@ -1,6 +1,6 @@
 mod consts;
 mod db;
-mod handler;
+mod handlers;
 
 use anyhow::Result;
 use consts::{DB_DIR, GROUP_DB_FILE};
@@ -9,7 +9,7 @@ use teloxide::dispatching::UpdateFilterExt;
 use teloxide::prelude::*;
 use tokio::fs;
 
-use crate::{db::Chat, handler::handle};
+use crate::{db::Chat, handlers::msgs};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -41,7 +41,7 @@ async fn run() -> Result<()> {
     let db_path = env::var("DB_PATH").unwrap_or(GROUP_DB_FILE.to_string());
     let chat_server = Arc::new(Chat::new(db_path)?);
 
-    let handler = dptree::entry().branch(Update::filter_message().endpoint(handle));
+    let handler = dptree::entry().branch(Update::filter_message().endpoint(msgs::handle));
 
     let bot = Bot::from_env();
     Dispatcher::builder(bot, handler)
