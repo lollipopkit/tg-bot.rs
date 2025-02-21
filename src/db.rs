@@ -1,8 +1,7 @@
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use sqlite::Connection;
 use std::sync::{Arc, Mutex};
 
-#[derive(Debug)]
 pub struct Chat {
     pub database: Arc<Mutex<Connection>>,
 }
@@ -40,51 +39,55 @@ impl Chat {
         raw: &str,
     ) -> Result<()> {
         let lock = self.database.lock().unwrap();
-        let mut stmt = lock.prepare(
-            "INSERT INTO message_records(
-                group_id, user, text, time, msg_id, user_id, raw
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        )?;
-        stmt.execute(params![chat_id, username, text, time, msg_id, user_id, raw])?;
+        let query =
+            "INSERT INTO message_records(group_id, user, text, time, msg_id, user_id, raw) \
+                    VALUES (?, ?, ?, ?, ?, ?, ?)";
+        let mut stmt = lock.prepare(query)?;
+        stmt.bind((1, chat_id))?;
+        stmt.bind((2, username))?;
+        stmt.bind((3, text))?;
+        stmt.bind((4, time))?;
+        stmt.bind((5, msg_id as i64))?;
+        stmt.bind((6, user_id as i64))?;
+        stmt.bind((7, raw))?;
+        stmt.next()?;
 
         Ok(())
     }
 
     pub fn get_tot_msg(&self, chat_id: i64) -> Result<i64> {
         let lock = self.database.lock().unwrap();
-        let mut stmt = lock.prepare(
-            "SELECT count(*)
-            from message_records
-            where group_id = ?;",
-        )?;
+        let query = "SELECT count(*) from message_records where group_id = ?";
+        let mut stmt = lock.prepare(query)?;
+        stmt.bind((1, chat_id))?;
 
-        let tot = stmt.query_row([chat_id], |row| Ok(row.get(0)?)).unwrap();
-
-        Ok(tot)
+        if let sqlite::State::Row = stmt.next()? {
+            Ok(stmt.read::<i64, _>(0)?)
+        } else {
+            Ok(0)
+        }
     }
 
     fn get_group_percent(&self, chat_id: i64) -> Result<Vec<UserPercent>> {
         let lock = self.database.lock().unwrap();
-        let mut stmt = lock.prepare(
-            "SELECT user, count(*) * 100.0 / sum(count(*)) over () as percent
-             FROM message_records
-             WHERE group_id = ?
-             GROUP BY group_id, user
-             ORDER BY percent DESC;",
-        )?;
+        let query = "SELECT user, count(*) * 100.0 / sum(count(*)) over () as percent \
+                    FROM message_records \
+                    WHERE group_id = ? \
+                    GROUP BY group_id, user \
+                    ORDER BY percent DESC";
 
-        let percents_iter = stmt
-            .query_map([chat_id], |row| {
-                Ok(UserPercent {
-                    user: row.get(0)?,
-                    percent: row.get(1)?,
-                })
-            })
-            .unwrap();
+        let mut stmt = lock.prepare(query)?;
+        stmt.bind((1, chat_id))?;
 
-        let perc_vec: Vec<UserPercent> = percents_iter.map(|d| d.unwrap()).collect();
+        let mut results = Vec::new();
+        while let Ok(sqlite::State::Row) = stmt.next() {
+            results.push(UserPercent {
+                user: stmt.read::<String, _>("user")?,
+                percent: stmt.read::<f64, _>("percent")? as f32,
+            });
+        }
 
-        Ok(perc_vec)
+        Ok(results)
     }
 
     pub fn get_group_percent_str(&self, chat_id: i64) -> Result<String> {
@@ -102,48 +105,50 @@ impl Chat {
 
             builder.push_str(format!("{} {:.2}%\n", data.user, data.percent).as_str());
         }
-        builder.push_str(format!("\n#stats").as_str());
+        builder.push_str("\n#stats");
 
         Ok(builder)
     }
 
     pub fn get_user_percent_str(&self, chat_id: i64, username: &String) -> Result<String> {
         let lock = self.database.lock().unwrap();
-        let mut stmt = lock.prepare(
-            "SELECT mr.user, count(*) * 100.0 / (
-                SELECT count(*) FROM message_records WHERE group_id = mr.group_id
-            ) as percent
-             FROM message_records as mr
-             WHERE mr.group_id = ? AND mr.user = ?;",
-        )?;
+        let query = "SELECT mr.user, count(*) * 100.0 / ( \
+                    SELECT count(*) FROM message_records WHERE group_id = mr.group_id \
+                    ) as percent \
+                    FROM message_records as mr \
+                    WHERE mr.group_id = ? AND mr.user = ?";
 
-        let data = stmt.query_row(params![chat_id, username], |row| {
-            Ok(UserPercent {
-                user: row.get(0)?,
-                percent: row.get(1)?,
-            })
-        })?;
+        let mut stmt = lock.prepare(query)?;
+        stmt.bind((1, chat_id))?;
+        stmt.bind((2, username.as_str()))?;
 
-        Ok(format!("{:.2}%", data.percent))
+        if let Ok(sqlite::State::Row) = stmt.next() {
+            let percent = stmt.read::<f64, _>("percent")? as f32;
+            Ok(format!("{:.2}%", percent))
+        } else {
+            Ok("0.00%".to_string())
+        }
     }
 }
 
 fn get_db(path: Option<&str>) -> Result<Connection> {
     let db = match path {
-        Some(path) => {
-            let path = path;
-            Connection::open(&path)?
-        }
-        None => Connection::open_in_memory()?,
+        Some(path) => Connection::open(path)?,
+        None => Connection::open(":memory:")?,
     };
 
-    db.execute_batch(
-        "PRAGMA journal_mode = WAL;
-         PRAGMA synchronous = NORMAL;
-         PRAGMA cache_size = -2000;
-         PRAGMA temp_store = MEMORY;
-         PRAGMA mmap_size = 30000000000;",
-    )?;
+    // Set pragmas
+    let pragmas = [
+        "PRAGMA journal_mode = WAL",
+        "PRAGMA synchronous = NORMAL",
+        "PRAGMA cache_size = -2000",
+        "PRAGMA temp_store = MEMORY",
+        "PRAGMA mmap_size = 30000000000",
+    ];
+
+    for pragma in pragmas {
+        db.execute(pragma)?;
+    }
 
     run_migrations(&db)?;
     Ok(db)
@@ -162,7 +167,6 @@ fn run_migrations(conn: &Connection) -> Result<()> {
             raw TEXT,
             UNIQUE(group_id, msg_id)
         );",
-        [],
     )?;
 
     Ok(())
