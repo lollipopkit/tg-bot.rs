@@ -4,11 +4,18 @@ use teloxide::{prelude::*, utils::command::BotCommands};
 use crate::{consts::BOT_ID, db::Chat};
 
 #[derive(BotCommands, PartialEq, Debug)]
+#[command(rename_rule = "lowercase")]
 enum Command {
-    #[command(rename = "lowercase")]
+    #[command(description = "Show stats for the current group")]
     GroupStats,
-    #[command(rename = "lowercase")]
+    #[command(description = "Show stats for a specific user")]
     UserStats(String),
+    #[command(description = "Show your Telegram user ID")]
+    Uid,
+    #[command(description = "Check if the bot is running")]
+    Ping,
+    #[command(description = "Display help message")]
+    Help,
 }
 
 pub async fn handle(
@@ -53,6 +60,17 @@ async fn handle_cmd(
             )
         }
         Command::UserStats(username) => cs.get_user_percent_str(chat_id.0, &username)?,
+        Command::Uid => {
+            let user = m.from();
+            let username = user
+                .map(|u| u.username.clone())
+                .flatten()
+                .unwrap_or_default();
+            let user_id = user.map(|u| u.id.0).unwrap_or_default();
+            format!("Username: {}\nUser ID: {}", username, user_id)
+        }
+        Command::Ping => "Pong".to_string(),
+        Command::Help => Command::descriptions().to_string(),
     };
 
     if !response.is_empty() {
