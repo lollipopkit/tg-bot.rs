@@ -1,3 +1,4 @@
+mod ai;
 mod consts;
 mod db;
 mod handlers;
@@ -9,6 +10,7 @@ use teloxide::prelude::*;
 use tokio::fs;
 
 use crate::{
+    ai::OpenAI,
     db::Chat,
     handlers::{commands, msgs},
 };
@@ -43,9 +45,22 @@ async fn run() -> Result<()> {
     let db_path = env::var("DB_PATH").unwrap_or(GROUP_DB_FILE.to_string());
     let chat_server = Arc::new(Chat::new(db_path)?);
 
-    let bot = Bot::from_env();
+    // Initialize OpenAI client
+    let openai = match OpenAI::new() {
+        Ok(client) => {
+            log::info!("OpenAI client initialized successfully");
+            Arc::new(client)
+        },
+        Err(e) => {
+            log::error!("Failed to initialize OpenAI client: {}", e);
+            log::error!("AI features will be unavailable. Make sure OPENAI_API_KEY is properly set.");
+            return Err(e);
+        }
+    };
 
-    log::info!("Starting teloxide bot...");
+    let bot = Bot::from_env();
+    let me = bot.get_me().await?;
+    log::info!("Starting teloxide bot as @{}", me.username());
 
     let handler = Update::filter_message()
         .branch(
@@ -59,7 +74,7 @@ async fn run() -> Result<()> {
         );
 
     Dispatcher::builder(bot, handler)
-        .dependencies(dptree::deps![chat_server])
+        .dependencies(dptree::deps![chat_server, openai, me])
         .enable_ctrlc_handler()
         .build()
         .dispatch()

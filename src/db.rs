@@ -12,6 +12,13 @@ struct UserPercent {
     percent: f32,
 }
 
+// Add a new struct to store message history
+#[derive(Debug)]
+pub struct MessageHistory {
+    pub user: String,
+    pub text: String,
+}
+
 impl Chat {
     pub fn new(db_path: String) -> Result<Self> {
         let conn = get_db(Some(db_path.as_str()))?;
@@ -128,6 +135,34 @@ impl Chat {
         } else {
             Ok("0.00%".to_string())
         }
+    }
+
+    // Add method to get recent messages for context
+    pub fn get_recent_messages(&self, chat_id: i64, limit: i64) -> Result<Vec<MessageHistory>> {
+        let lock = self.database.lock().unwrap();
+        let query = "SELECT user, text, time FROM message_records 
+                     WHERE group_id = ? AND text IS NOT NULL 
+                     ORDER BY time DESC LIMIT ?";
+
+        let mut stmt = lock.prepare(query)?;
+        stmt.bind((1, chat_id))?;
+        stmt.bind((2, limit))?;
+
+        let mut messages = Vec::new();
+        while let Ok(sqlite::State::Row) = stmt.next() {
+            let text = stmt.read::<String, _>("text")?;
+            // Skip empty messages or those without text
+            if !text.is_empty() {
+                messages.push(MessageHistory {
+                    user: stmt.read::<String, _>("user")?,
+                    text,
+                });
+            }
+        }
+
+        // Reverse to get chronological order
+        messages.reverse();
+        Ok(messages)
     }
 }
 
