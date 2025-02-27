@@ -3,6 +3,8 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::env;
 
+use crate::consts::AI_PROMPT;
+
 pub struct OpenAI {
     client: Client,
     api_key: String,
@@ -20,8 +22,6 @@ struct ChatMessage {
 struct ChatCompletionRequest {
     model: String,
     messages: Vec<ChatMessage>,
-    temperature: f32,
-    max_tokens: u32,
 }
 
 // Enhanced response models to handle error cases
@@ -76,17 +76,29 @@ impl OpenAI {
         })
     }
 
-    pub async fn generate_response(&self, messages: Vec<(String, String)>) -> Result<String> {
-        let formatted_messages: Vec<ChatMessage> = messages
-            .into_iter()
-            .map(|(role, content)| ChatMessage { role, content })
-            .collect();
+    pub async fn generate_response(
+        &self, 
+        messages: Vec<(String, String)>,
+        prompter: String,
+    ) -> Result<String> {
+        let mut msgs = vec![ChatMessage {
+            role: "system".to_string(),
+            content: AI_PROMPT.to_string(),
+        }];
+
+        let fmted_msgs: String = messages
+            .iter()
+            .map(|(user, content)| format!("[{}]: [{}]", user, content))
+            .collect::<Vec<String>>()
+            .join("\n");
+        msgs.push(ChatMessage {
+            role: "user".to_string(),
+            content: fmted_msgs.replace("[USER_ID_LOCATOR]", &prompter),
+        });
 
         let request = ChatCompletionRequest {
             model: self.model.clone(),
-            messages: formatted_messages,
-            temperature: 0.7,
-            max_tokens: 150,
+            messages: msgs,
         };
 
         // Send request

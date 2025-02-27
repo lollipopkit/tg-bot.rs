@@ -35,15 +35,26 @@ pub async fn handle_message(
         )?;
 
         // Check if bot should respond
-        let should_respond = is_bot_mentioned(&msg, &me.username.clone().unwrap_or_default())
-            || (chat_id.0 < 0 && should_random_reply());
+        let mentioned = is_bot_mentioned(&msg, &me.username.clone().unwrap_or_default());
+        let should_respond = mentioned || (chat_id.0 < 0 && should_random_reply());
 
         if should_respond {
             // Get conversation context
             let context = prepare_context(chat_id.0, &cs, &username, text)?;
 
+            // If bot is mentioned, use set it to the caller, or use the last message's user
+            let prompter = if mentioned {
+                username.clone()
+            } else {
+                context
+                    .iter()
+                    .last()
+                    .map(|(role, _)| role.clone())
+                    .unwrap_or("user".to_string())
+            };
+
             // Generate AI response
-            match ai.generate_response(context).await {
+            match ai.generate_response(context, prompter).await {
                 Ok(response) => {
                     bot.send_message(chat_id, response).await?;
                 }
@@ -97,22 +108,16 @@ fn prepare_context(
     current_msg: &str,
 ) -> Result<Vec<(String, String)>, Box<dyn Error + Send + Sync>> {
     // Start with system message
-    let mut context = vec![(
-        "system".to_string(),
-        "You are a helpful AI assistant in a group chat. Keep responses concise and relevant."
-            .to_string(),
-    )];
+    let mut context = vec![];
 
     // Add recent message history for context
     let history = cs.get_recent_messages(chat_id, MAX_CONTEXT_MESSAGES)?;
     for msg in history {
-        let role = "user".to_string();
-        let content = format!("{}: {}", msg.user, msg.text);
-        context.push((role, content));
+        context.push((msg.user, msg.text));
     }
 
     // Add the current message
-    context.push(("user".to_string(), format!("{}: {}", username, current_msg)));
+    context.push((username.to_string(), current_msg.to_string()));
 
     Ok(context)
 }
