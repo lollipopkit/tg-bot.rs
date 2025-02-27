@@ -4,13 +4,12 @@ mod db;
 mod handlers;
 
 use anyhow::Result;
-use consts::{DB_DIR, GROUP_DB_FILE};
+use consts::{DB_DIR, MSG_DB_FILE};
 use teloxide::prelude::*;
 
 use crate::{
-    ai::OpenAI,
     db::Db,
-    handlers::{commands, msgs},
+    handlers::{cmds, msgs},
 };
 
 #[tokio::main]
@@ -40,17 +39,17 @@ fn init_logger() {
 }
 
 async fn run() -> Result<()> {
-    let db_path = std::env::var("DB_PATH").unwrap_or(GROUP_DB_FILE.to_string());
+    let db_path = std::env::var("DB_PATH").unwrap_or(MSG_DB_FILE.to_string());
     let chat_db = Db::new(db_path).await?;
-    let openai = OpenAI::new()?;
+    let openai = ai::OpenAI::new()?;
 
     let bot = Bot::from_env();
     let me = bot.get_me().await?;
     log::info!("Starting teloxide bot as @{}", me.username());
 
     let cmds_branch = dptree::entry()
-        .filter_command::<commands::Command>()
-        .endpoint(commands::answer);
+        .filter_command::<cmds::Command>()
+        .endpoint(cmds::answer);
     // Filter out messages starting with '/'.
     // If this msg has no text, maybe it's a system msg, record it anyway
     let msgs_branch =
