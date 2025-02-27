@@ -40,7 +40,7 @@ pub async fn handle_message(
 
         if should_respond {
             // Get conversation context
-            let context = prepare_context(chat_id.0, &cs, &username, text)?;
+            let context = prepare_context(chat_id.0, &cs)?;
 
             // If bot is mentioned, use set it to the caller, or use the last message's user
             // let prompter = if mentioned {
@@ -104,8 +104,6 @@ fn should_random_reply() -> bool {
 fn prepare_context(
     chat_id: i64,
     cs: &Arc<Chat>,
-    username: &str,
-    current_msg: &str,
 ) -> Result<Vec<(String, String)>, Box<dyn Error + Send + Sync>> {
     // Start with system message
     let mut context = vec![];
@@ -116,8 +114,6 @@ fn prepare_context(
         context.push((msg.user, msg.text));
     }
 
-    // Add the current message
-    context.push((username.to_string(), current_msg.to_string()));
-
+    // Since this fn is called after storing the current message, there's no need to add it
     Ok(context)
 }
