@@ -1,6 +1,9 @@
 use anyhow::Result;
 use sqlite::Connection;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 pub struct Chat {
     pub database: Arc<Mutex<Connection>>,
@@ -9,6 +12,7 @@ pub struct Chat {
 #[derive(Debug, PartialEq)]
 struct UserPercent {
     user: String,
+    user_id: i64,
     percent: f32,
 }
 
@@ -16,15 +20,16 @@ struct UserPercent {
 #[derive(Debug)]
 pub struct MessageHistory {
     pub user: String,
+    pub user_id: i64,
     pub text: String,
 }
 
 impl Chat {
-    pub fn new(db_path: String) -> Result<Self> {
+    pub fn new(db_path: String) -> Result<Arc<Self>> {
         let conn = get_db(Some(db_path.as_str()))?;
         let database = Arc::new(Mutex::new(conn));
 
-        Ok(Chat { database })
+        Ok(Arc::new(Chat { database }))
     }
 
     #[allow(dead_code)]
@@ -77,10 +82,10 @@ impl Chat {
 
     fn get_group_percent(&self, chat_id: i64) -> Result<Vec<UserPercent>> {
         let lock = self.database.lock().unwrap();
-        let query = "SELECT user, count(*) * 100.0 / sum(count(*)) over () as percent \
+        let query = "SELECT user, user_id, count(*) * 100.0 / sum(count(*)) over () as percent \
                     FROM message_records \
-                    WHERE group_id = ? \
-                    GROUP BY group_id, user \
+                    WHERE group_id = ? AND user_id != 0 \
+                    GROUP BY group_id, user_id \
                     ORDER BY percent DESC";
 
         let mut stmt = lock.prepare(query)?;
@@ -90,6 +95,7 @@ impl Chat {
         while let Ok(sqlite::State::Row) = stmt.next() {
             results.push(UserPercent {
                 user: stmt.read::<String, _>("user")?,
+                user_id: stmt.read::<i64, _>("user_id")?,
                 percent: stmt.read::<f64, _>("percent")? as f32,
             });
         }
@@ -117,31 +123,11 @@ impl Chat {
         Ok(builder)
     }
 
-    pub fn get_user_percent_str(&self, chat_id: i64, username: &String) -> Result<String> {
-        let lock = self.database.lock().unwrap();
-        let query = "SELECT mr.user, count(*) * 100.0 / ( \
-                    SELECT count(*) FROM message_records WHERE group_id = mr.group_id \
-                    ) as percent \
-                    FROM message_records as mr \
-                    WHERE mr.group_id = ? AND mr.user = ?";
-
-        let mut stmt = lock.prepare(query)?;
-        stmt.bind((1, chat_id))?;
-        stmt.bind((2, username.as_str()))?;
-
-        if let Ok(sqlite::State::Row) = stmt.next() {
-            let percent = stmt.read::<f64, _>("percent")? as f32;
-            Ok(format!("{:.2}%", percent))
-        } else {
-            Ok("0.00%".to_string())
-        }
-    }
-
     // Add method to get recent messages for context
     pub fn get_recent_messages(&self, chat_id: i64, limit: i64) -> Result<Vec<MessageHistory>> {
         let lock = self.database.lock().unwrap();
-        let query = "SELECT user, text, time FROM message_records 
-                     WHERE group_id = ? AND text IS NOT NULL 
+        let query = "SELECT user, user_id, text, time FROM message_records 
+                     WHERE group_id = ? AND text IS NOT NULL AND text != ''
                      ORDER BY time DESC LIMIT ?";
 
         let mut stmt = lock.prepare(query)?;
@@ -155,6 +141,7 @@ impl Chat {
             if !text.is_empty() {
                 messages.push(MessageHistory {
                     user: stmt.read::<String, _>("user")?,
+                    user_id: stmt.read::<i64, _>("user_id")?,
                     text,
                 });
             }
@@ -163,6 +150,63 @@ impl Chat {
         // Reverse to get chronological order
         messages.reverse();
         Ok(messages)
+    }
+
+    /// Get latest user ID and name mapping
+    ///
+    /// ```
+    /// user_id1 username1 msg
+    /// user_id2 username2 msg
+    /// user_id1 username3 msg
+    /// ```
+    ///
+    /// Returns:
+    /// ```json
+    /// {user_id1: "username3", user_id2: "username2"}
+    /// ```
+    pub fn get_name_id_map(&self, ids: Vec<i64>) -> HashMap<i64, String> {
+        let mut result = HashMap::new();
+
+        if ids.is_empty() {
+            return result;
+        }
+
+        // Create parameters for SQL IN clause
+        let params = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+        let query = format!(
+            "SELECT user, user_id FROM message_records 
+             WHERE user_id IN ({}) 
+             ORDER BY time DESC",
+            params
+        );
+
+        if let Ok(lock) = self.database.lock() {
+            if let Ok(mut stmt) = lock.prepare(&query) {
+                // Bind all parameters
+                for (i, id) in ids.iter().enumerate() {
+                    if let Err(_) = stmt.bind((i + 1, *id)) {
+                        continue;
+                    }
+                }
+
+                // Process results
+                while let Ok(sqlite::State::Row) = stmt.next() {
+                    if let (Ok(username), Ok(user_id)) = (
+                        stmt.read::<String, _>("user"),
+                        stmt.read::<i64, _>("user_id"),
+                    ) {
+                        // Only insert if this username is not already mapped
+                        // This keeps the most recent username for each user ID
+                        if !result.contains_key(&user_id) {
+                            result.insert(user_id, username);
+                        }
+                    }
+                }
+            }
+        }
+
+        result
     }
 }
 

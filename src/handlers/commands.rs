@@ -1,5 +1,5 @@
 use std::{error::Error, sync::Arc};
-use teloxide::{prelude::*, utils::command::BotCommands};
+use teloxide::{prelude::*, types::Me, utils::command::BotCommands};
 
 use crate::db::Chat;
 
@@ -11,8 +11,6 @@ use crate::db::Chat;
 pub enum Command {
     #[command(description = "Show stats for the current group. (Only available in groups)")]
     GroupStats,
-    #[command(description = "Show stats for a specific user. (Only available in groups)")]
-    UserStats(String),
     #[command(description = "Show your Telegram user ID.")]
     Uid,
     #[command(description = "Check if the bot is running.")]
@@ -26,6 +24,7 @@ pub async fn answer(
     msg: Message,
     cmd: Command,
     cs: Arc<Chat>,
+    _me: Me,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let chat_id = msg.chat.id;
 
@@ -38,7 +37,6 @@ pub async fn answer(
             let group_percent = cs.get_group_percent_str(chat_id.0)?;
             format!("Total: {}\n{}", tot_msg, group_percent)
         }
-        (Command::UserStats(username), true) => cs.get_user_percent_str(chat_id.0, &username)?,
         (Command::Uid, _) => {
             let user = msg.from();
             let username = user.and_then(|u| u.username.clone()).unwrap_or_default();

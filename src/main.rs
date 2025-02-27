@@ -5,9 +5,7 @@ mod handlers;
 
 use anyhow::Result;
 use consts::{DB_DIR, GROUP_DB_FILE};
-use std::{env, sync::Arc};
 use teloxide::prelude::*;
-use tokio::fs;
 
 use crate::{
     ai::OpenAI,
@@ -25,7 +23,7 @@ async fn main() -> Result<()> {
 
 async fn init() -> Result<()> {
     init_logger();
-    fs::create_dir_all(DB_DIR).await?;
+    tokio::fs::create_dir_all(DB_DIR).await?;
 
     Ok(())
 }
@@ -42,39 +40,29 @@ fn init_logger() {
 }
 
 async fn run() -> Result<()> {
-    let db_path = env::var("DB_PATH").unwrap_or(GROUP_DB_FILE.to_string());
-    let chat_server = Arc::new(Chat::new(db_path)?);
-
-    // Initialize OpenAI client
-    let openai = match OpenAI::new() {
-        Ok(client) => {
-            log::info!("OpenAI client initialized successfully");
-            Arc::new(client)
-        },
-        Err(e) => {
-            log::error!("Failed to initialize OpenAI client: {}", e);
-            log::error!("AI features will be unavailable. Make sure OPENAI_API_KEY is properly set.");
-            return Err(e);
-        }
-    };
+    let db_path = std::env::var("DB_PATH").unwrap_or(GROUP_DB_FILE.to_string());
+    let chat_db = Chat::new(db_path)?;
+    let openai = OpenAI::new()?;
 
     let bot = Bot::from_env();
     let me = bot.get_me().await?;
     log::info!("Starting teloxide bot as @{}", me.username());
 
+    let cmds_branch = dptree::entry()
+        .filter_command::<commands::Command>()
+        .endpoint(commands::answer);
+    // Filter out messages starting with '/'.
+    // If this msg has no text, maybe it's a system msg, record it anyway
+    let msgs_branch =
+        dptree::filter(|msg: Message| msg.text().map_or(true, |text| !text.starts_with('/')))
+            .endpoint(msgs::handle_message);
+
     let handler = Update::filter_message()
-        .branch(
-            dptree::entry()
-                .filter_command::<commands::Command>()
-                .endpoint(commands::answer),
-        )
-        .branch(
-            dptree::filter(|msg: Message| !msg.text().map_or(false, |text| text.starts_with('/')))
-                .endpoint(msgs::handle_message),
-        );
+        .branch(cmds_branch)
+        .branch(msgs_branch);
 
     Dispatcher::builder(bot, handler)
-        .dependencies(dptree::deps![chat_server, openai, me])
+        .dependencies(dptree::deps![chat_db, openai, me])
         .enable_ctrlc_handler()
         .build()
         .dispatch()

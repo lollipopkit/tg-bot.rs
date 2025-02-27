@@ -22,58 +22,62 @@ pub async fn handle_message(
     let username = user.and_then(|u| u.username.clone()).unwrap_or_default();
     let user_id = user.map(|u| u.id.0).unwrap_or_default();
     let raw = serde_json::to_string(&msg)?;
+    let text = msg.text();
 
-    if let Some(text) = msg.text() {
-        cs.store_msg(
-            chat_id.0,
-            msg.id.0,
-            &username,
-            Some(text),
-            msg.date.timestamp(),
-            user_id,
-            &raw,
-        )?;
+    cs.store_msg(
+        chat_id.0,
+        msg.id.0,
+        &username,
+        text,
+        msg.date.timestamp(),
+        user_id,
+        &raw,
+    )?;
 
-        // Check if bot should respond
-        let mentioned = is_bot_mentioned(&msg, &me.username.clone().unwrap_or_default());
-        let should_respond = mentioned || (chat_id.0 < 0 && should_random_reply());
+    if let None = text {
+        return Ok(());
+    }
 
-        if should_respond {
-            // Get conversation context
-            let context = prepare_context(chat_id.0, &cs)?;
+    // Check if bot should respond
+    let mentioned = is_bot_mentioned(&msg, &me.username.clone().unwrap_or_default());
+    let is_private = chat_id.0 > 0;
+    let should_respond = mentioned || (chat_id.0 < 0 && should_random_reply()) || is_private;
 
-            // If bot is mentioned, use set it to the caller, or use the last message's user
-            // let prompter = if mentioned {
-            //     username.clone()
-            // } else {
-            //     context
-            //         .iter()
-            //         .last()
-            //         .map(|(role, _)| role.clone())
-            //         .unwrap_or("user".to_string())
-            // };
+    if !should_respond {
+        return Ok(());
+    }
 
-            // Generate AI response
-            match ai.generate_response(context).await {
-                Ok(response) => {
-                    bot.send_message(chat_id, response).await?;
-                }
-                Err(e) => {
-                    log::error!("Failed to generate AI response: {:?}", e);
-                }
-            }
+    // Get conversation context
+    let context = prepare_context(chat_id.0, &cs)?;
+
+    // If bot is mentioned, use set it to the caller, or use the last message's user
+    // let prompter = if mentioned {
+    //     username.clone()
+    // } else {
+    //     context
+    //         .iter()
+    //         .last()
+    //         .map(|(role, _)| role.clone())
+    //         .unwrap_or("user".to_string())
+    // };
+
+    // Generate AI response
+    match ai.generate_response(context).await {
+        Ok(response) => {
+            let sent_msg = bot.send_message(chat_id, &response).await?;
+            cs.store_msg(
+                chat_id.0,
+                sent_msg.id.0,
+                &me.username.clone().unwrap_or_default(),
+                Some(&response),
+                sent_msg.date.timestamp(),
+                me.id.0,
+                &serde_json::to_string(&sent_msg)?,
+            )?;
         }
-    } else {
-        // Store non-text messages without triggering AI
-        cs.store_msg(
-            chat_id.0,
-            msg.id.0,
-            &username,
-            None,
-            msg.date.timestamp(),
-            user_id,
-            &raw,
-        )?;
+        Err(e) => {
+            log::error!("Failed to generate AI response: {:?}", e);
+        }
     }
 
     Ok(())
@@ -110,8 +114,11 @@ fn prepare_context(
 
     // Add recent message history for context
     let history = cs.get_recent_messages(chat_id, MAX_CONTEXT_MESSAGES)?;
+    let ids = history.iter().map(|msg| msg.user_id).collect::<Vec<_>>();
+    let id_name_map = cs.get_name_id_map(ids);
     for msg in history {
-        context.push((msg.user, msg.text));
+        let name = id_name_map.get(&msg.user_id).unwrap_or(&msg.user);
+        context.push((name.to_string(), msg.text));
     }
 
     // Since this fn is called after storing the current message, there's no need to add it

@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::env;
+use std::{env, sync::Arc};
 
 use crate::consts::AI_PROMPT;
 
@@ -51,7 +51,7 @@ struct OpenAIError {
 }
 
 impl OpenAI {
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Result<Arc<Self>> {
         let api_key =
             env::var("OPENAI_API_KEY").context("OPENAI_API_KEY environment variable not set")?;
 
@@ -68,12 +68,12 @@ impl OpenAI {
 
         log::info!("Using OpenAI API URL: {}", api_url);
 
-        Ok(Self {
+        Ok(Arc::new(Self {
             client: Client::new(),
             api_key,
             model,
             api_url,
-        })
+        }))
     }
 
     pub async fn generate_response(&self, messages: Vec<(String, String)>) -> Result<String> {
