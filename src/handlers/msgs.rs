@@ -5,13 +5,13 @@ use teloxide::{prelude::*, types::Me};
 use crate::{
     ai::OpenAI,
     consts::{MAX_CONTEXT_MESSAGES, RANDOM_REPLY_CHANCE},
-    db::Chat,
+    db::Db,
 };
 
 pub async fn handle_message(
     bot: Bot,
     msg: Message,
-    cs: Arc<Chat>,
+    cs: Arc<Db>,
     ai: Arc<OpenAI>,
     me: Me,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -107,7 +107,7 @@ fn should_random_reply() -> bool {
 
 fn prepare_context(
     chat_id: i64,
-    cs: &Arc<Chat>,
+    cs: &Arc<Db>,
 ) -> Result<Vec<(String, String)>, Box<dyn Error + Send + Sync>> {
     // Start with system message
     let mut context = vec![];

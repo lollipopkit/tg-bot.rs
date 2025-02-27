@@ -5,8 +5,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-pub struct Chat {
-    pub database: Arc<Mutex<Connection>>,
+pub struct Db {
+    pub database: Mutex<Connection>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -24,20 +24,20 @@ pub struct MessageHistory {
     pub text: String,
 }
 
-impl Chat {
+impl Db {
     pub fn new(db_path: String) -> Result<Arc<Self>> {
         let conn = get_db(Some(db_path.as_str()))?;
-        let database = Arc::new(Mutex::new(conn));
+        let database = Mutex::new(conn);
 
-        Ok(Arc::new(Chat { database }))
+        Ok(Arc::new(Db { database }))
     }
 
     #[allow(dead_code)]
     pub fn in_memory() -> Result<Self> {
         let conn = get_db(None)?;
-        let database = Arc::new(Mutex::new(conn));
+        let database = Mutex::new(conn);
 
-        Ok(Chat { database })
+        Ok(Db { database })
     }
 
     pub fn store_msg(

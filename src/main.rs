@@ -9,7 +9,7 @@ use teloxide::prelude::*;
 
 use crate::{
     ai::OpenAI,
-    db::Chat,
+    db::Db,
     handlers::{commands, msgs},
 };
 
@@ -41,7 +41,7 @@ fn init_logger() {
 
 async fn run() -> Result<()> {
     let db_path = std::env::var("DB_PATH").unwrap_or(GROUP_DB_FILE.to_string());
-    let chat_db = Chat::new(db_path)?;
+    let chat_db = Db::new(db_path)?;
     let openai = OpenAI::new()?;
 
     let bot = Bot::from_env();

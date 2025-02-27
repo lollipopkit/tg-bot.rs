@@ -1,7 +1,7 @@
 use std::{error::Error, sync::Arc};
 use teloxide::{prelude::*, types::Me, utils::command::BotCommands};
 
-use crate::db::Chat;
+use crate::db::Db;
 
 #[derive(BotCommands, Clone, Debug)]
 #[command(
@@ -23,7 +23,7 @@ pub async fn answer(
     bot: Bot,
     msg: Message,
     cmd: Command,
-    cs: Arc<Chat>,
+    cs: Arc<Db>,
     _me: Me,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let chat_id = msg.chat.id;
