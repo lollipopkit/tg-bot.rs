@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT user, user_id, text, time FROM message_records \n            WHERE group_id = ? AND text IS NOT NULL AND text != ''\n            ORDER BY time DESC LIMIT ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "user",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "user_id",
+        "ordinal": 1,
+        "type_info": "Int64"
+      },
+      {
+        "name": "text",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "time",
+        "ordinal": 3,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "9437584cacdcc1f97746464201de5073a47558e2904d2051e9d2d7d2631883ec"
+}

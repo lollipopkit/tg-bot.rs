@@ -33,8 +33,8 @@ pub async fn answer(
 
     let response = match (cmd, is_group) {
         (Command::GroupStats, true) => {
-            let tot_msg = cs.get_tot_msg(chat_id.0)?;
-            let group_percent = cs.get_group_percent_str(chat_id.0)?;
+            let tot_msg = cs.get_tot_msg(chat_id.0).await?;
+            let group_percent = cs.get_group_percent_str(chat_id.0).await?;
             format!("Total: {}\n{}", tot_msg, group_percent)
         }
         (Command::Uid, _) => {

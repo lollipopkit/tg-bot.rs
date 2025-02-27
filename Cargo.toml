@@ -17,7 +17,13 @@ tokio-stream = "^0.1"
 
 chrono = "^0"
 openssl = { version = "^0", features = ["vendored"] }
-sqlite = "^0"
+sqlx = { version = "0.7", features = [
+    "runtime-tokio",
+    "tls-native-tls",
+    "sqlite",
+    "chrono",
+    "macros",
+] }
 anyhow = "^1"
 const_format = "^0"
 serde = "^1"

@@ -4,7 +4,6 @@ use teloxide::{prelude::*, types::Me};
 
 use crate::{
     ai::OpenAI,
-    consts::{MAX_CONTEXT_MESSAGES, RANDOM_REPLY_CHANCE},
     db::Db,
 };
 
@@ -32,7 +31,7 @@ pub async fn handle_message(
         msg.date.timestamp(),
         user_id,
         &raw,
-    )?;
+    ).await?;
 
     if let None = text {
         return Ok(());
@@ -48,7 +47,7 @@ pub async fn handle_message(
     }
 
     // Get conversation context
-    let context = prepare_context(chat_id.0, &cs)?;
+    let context = prepare_context(chat_id.0, &cs).await?;
 
     // If bot is mentioned, use set it to the caller, or use the last message's user
     // let prompter = if mentioned {
@@ -73,7 +72,7 @@ pub async fn handle_message(
                 sent_msg.date.timestamp(),
                 me.id.0,
                 &serde_json::to_string(&sent_msg)?,
-            )?;
+            ).await?;
         }
         Err(e) => {
             log::error!("Failed to generate AI response: {:?}", e);
@@ -105,7 +104,7 @@ fn should_random_reply() -> bool {
     rng.random::<f32>() < RANDOM_REPLY_CHANCE
 }
 
-fn prepare_context(
+async fn prepare_context(
     chat_id: i64,
     cs: &Arc<Db>,
 ) -> Result<Vec<(String, String)>, Box<dyn Error + Send + Sync>> {
@@ -113,9 +112,9 @@ fn prepare_context(
     let mut context = vec![];
 
     // Add recent message history for context
-    let history = cs.get_recent_messages(chat_id, MAX_CONTEXT_MESSAGES)?;
+    let history = cs.get_recent_messages(chat_id, MAX_CONTEXT_MESSAGES).await?;
     let ids = history.iter().map(|msg| msg.user_id).collect::<Vec<_>>();
-    let id_name_map = cs.get_name_id_map(ids);
+    let id_name_map = cs.get_name_id_map(ids).await?;
     for msg in history {
         let name = id_name_map.get(&msg.user_id).unwrap_or(&msg.user);
         context.push((name.to_string(), msg.text));
@@ -124,3 +123,7 @@ fn prepare_context(
     // Since this fn is called after storing the current message, there's no need to add it
     Ok(context)
 }
+
+
+const RANDOM_REPLY_CHANCE: f32 = 0.1;
+const MAX_CONTEXT_MESSAGES: i64 = 10;

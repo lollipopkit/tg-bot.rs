@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                SELECT user, user_id FROM message_records \n                WHERE user_id = ? \n                ORDER BY time DESC LIMIT 1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "name": "user",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "user_id",
+        "ordinal": 1,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "fc7680280fa47da9944473759042e5c106883b2f93c748c64fd6657109e3eb33"
+}

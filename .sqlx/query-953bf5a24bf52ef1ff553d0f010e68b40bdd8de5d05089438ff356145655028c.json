@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT user, user_id, COUNT(*) * 100.0 / SUM(COUNT(*)) OVER () as percent \n            FROM message_records \n            WHERE group_id = ? AND user_id != 0 \n            GROUP BY group_id, user_id \n            ORDER BY percent DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "user",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "user_id",
+        "ordinal": 1,
+        "type_info": "Int64"
+      },
+      {
+        "name": "percent",
+        "ordinal": 2,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "953bf5a24bf52ef1ff553d0f010e68b40bdd8de5d05089438ff356145655028c"
+}
