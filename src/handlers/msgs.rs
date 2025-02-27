@@ -43,18 +43,18 @@ pub async fn handle_message(
             let context = prepare_context(chat_id.0, &cs, &username, text)?;
 
             // If bot is mentioned, use set it to the caller, or use the last message's user
-            let prompter = if mentioned {
-                username.clone()
-            } else {
-                context
-                    .iter()
-                    .last()
-                    .map(|(role, _)| role.clone())
-                    .unwrap_or("user".to_string())
-            };
+            // let prompter = if mentioned {
+            //     username.clone()
+            // } else {
+            //     context
+            //         .iter()
+            //         .last()
+            //         .map(|(role, _)| role.clone())
+            //         .unwrap_or("user".to_string())
+            // };
 
             // Generate AI response
-            match ai.generate_response(context, prompter).await {
+            match ai.generate_response(context).await {
                 Ok(response) => {
                     bot.send_message(chat_id, response).await?;
                 }

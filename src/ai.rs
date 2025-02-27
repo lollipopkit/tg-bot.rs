@@ -55,7 +55,7 @@ impl OpenAI {
         let api_key =
             env::var("OPENAI_API_KEY").context("OPENAI_API_KEY environment variable not set")?;
 
-        let model = env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-3.5-turbo".to_string());
+        let model = env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
 
         // Get custom base URL from environment or use default
         let api_base =
@@ -76,11 +76,7 @@ impl OpenAI {
         })
     }
 
-    pub async fn generate_response(
-        &self, 
-        messages: Vec<(String, String)>,
-        prompter: String,
-    ) -> Result<String> {
+    pub async fn generate_response(&self, messages: Vec<(String, String)>) -> Result<String> {
         let mut msgs = vec![ChatMessage {
             role: "system".to_string(),
             content: AI_PROMPT.to_string(),
@@ -93,7 +89,7 @@ impl OpenAI {
             .join("\n");
         msgs.push(ChatMessage {
             role: "user".to_string(),
-            content: fmted_msgs.replace("[USER_ID_LOCATOR]", &prompter),
+            content: fmted_msgs,
         });
 
         let request = ChatCompletionRequest {
